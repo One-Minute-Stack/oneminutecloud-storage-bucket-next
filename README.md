@@ -1,15 +1,16 @@
 # @oneminutecloud/storage-bucket-next
 
-> File uploads made **100x easier** for Next.js applications. No configuration hell, no S3 complexity, just upload.
+> File uploads and previews made **100x easier** for Next.js applications. No configuration hell, no S3 complexity, just upload and preview.
 
 [![npm version](https://badge.fury.io/js/@oneminutecloud%2Fstorage-bucket-next.svg)](https://www.npmjs.com/package/@oneminutecloud/storage-bucket-next)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## ✨ Features
 
-- 🚀 **Simple API** - Just `await storage.upload(file, bucketId)`
+- 🚀 **Simple API** - Just `await storage.upload(file, bucketId)` and `await storage.get(key)`
 - 🔒 **Secure by default** - API keys never exposed to the client
 - 📦 **Multipart uploads** - Handle files of any size efficiently
+- 🖼️ **Instant previews** - Get presigned URLs with one line of code
 - 🎯 **TypeScript support** - Full type safety out of the box
 - ⚡ **Progress tracking** - Real-time upload progress callbacks
 - 🌐 **Edge compatible** - Works with Next.js Edge Runtime
@@ -31,7 +32,7 @@ npm install @oneminutecloud/storage-bucket-next
 
 ### 2. Add API Key to Environment Variables
 
-Create `.env.local` in your project root:
+Create `.env` in your project root:
 
 ```env
 ONEMINUTECLOUD_API_KEY=your_api_key_here
@@ -46,7 +47,7 @@ import { handleStorageRequest } from "@oneminutecloud/storage-bucket-next";
 
 export async function POST(
   request: Request,
-  props: { params: Promise<{ provider: string }> }
+  props: { params: Promise<{ provider: string }> },
 ) {
   return handleStorageRequest({
     request,
@@ -58,7 +59,7 @@ export async function POST(
 
 **That's it for setup!** 🎉
 
-### 4. Upload Files in Your Components
+### 4. Upload Files
 
 ```typescript
 "use client";
@@ -76,7 +77,7 @@ export default function UploadPage() {
     setUploading(true);
     try {
       const { key } = await storage.upload(file, "your-bucket-id");
-      
+
       // Save the key to your database
       await fetch("/api/files", {
         method: "POST",
@@ -84,8 +85,9 @@ export default function UploadPage() {
       });
 
       alert("Upload successful!");
-    } catch (error) {
-      console.error("Upload failed:", error);
+    } catch (error:any) {
+      console.error("Upload failed:", error.message);
+      alert(error.message);
     } finally {
       setUploading(false);
     }
@@ -100,6 +102,35 @@ export default function UploadPage() {
 }
 ```
 
+### 5. Preview Files
+
+```typescript
+"use client";
+
+import { storage } from "@oneminutecloud/storage-bucket-next";
+import { useState } from "react";
+
+export default function FilePreview({ fileKey }: { fileKey: string }) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  const loadPreview = async () => {
+    try {
+      const { url } = await storage.get(fileKey);
+      setPreviewUrl(url);
+    } catch (error) {
+      console.error("Failed to load preview:", error);
+    }
+  };
+
+  return (
+    <div>
+      <button onClick={loadPreview}>Load Preview</button>
+      {previewUrl && <img src={previewUrl} alt="Preview" />}
+    </div>
+  );
+}
+```
+
 ## 📚 API Reference
 
 ### `storage.upload(file, bucketId, options?)`
@@ -108,20 +139,20 @@ Upload a file to your storage bucket.
 
 #### Parameters
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `file` | `File` | ✅ Yes | The file to upload |
-| `bucketId` | `string` | ✅ Yes | Your bucket ID (UUID format) |
-| `options` | `UploadOptions` | ❌ No | Upload options |
+| Parameter  | Type            | Required | Description                  |
+| ---------- | --------------- | -------- | ---------------------------- |
+| `file`     | `File`          | ✅ Yes   | The file to upload           |
+| `bucketId` | `string`        | ✅ Yes   | Your bucket ID (UUID format) |
+| `options`  | `UploadOptions` | ❌ No    | Upload options               |
 
 #### Options
 
 ```typescript
 interface UploadOptions {
   onProgress?: (progress: {
-    loaded: number;    // Bytes uploaded
-    total: number;     // Total file size
-    percent: number;   // Progress percentage (0-100)
+    loaded: number; // Bytes uploaded
+    total: number; // Total file size
+    percent: number; // Progress percentage (0-100)
   }) => void;
 }
 ```
@@ -130,8 +161,8 @@ interface UploadOptions {
 
 ```typescript
 Promise<{
-  key: string;  // Unique key to retrieve the file later
-}>
+  key: string; // Unique key to retrieve the file later
+}>;
 ```
 
 #### Example with Progress Tracking
@@ -145,27 +176,91 @@ const { key } = await storage.upload(file, bucketId, {
 });
 ```
 
-### `handleStorageRequest({ request, props, apiKey })`
+---
 
-API route handler for secure uploads.
+### `storage.get(key)`
+
+Get a secure, temporary URL to preview or download a file.
 
 #### Parameters
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `request` | `Request` | ✅ Yes | Next.js request object |
-| `props` | `{ params: Promise<{ provider: string }> }` | ✅ Yes | Route params |
-| `apiKey` | `string` | ✅ Yes | Your OneMinute Cloud API key |
+| Parameter | Type     | Required | Description                                   |
+| --------- | -------- | -------- | --------------------------------------------- |
+| `key`     | `string` | ✅ Yes   | The file key returned from `storage.upload()` |
 
 #### Returns
 
 ```typescript
-Promise<Response>
+Promise<{
+  url: string; // Presigned URL (valid for 5 minutes)
+  expiresAt: number; // Unix timestamp when URL expires
+}>;
 ```
 
-## 🎯 Complete Example
+#### Examples
 
-Here's a full example with progress tracking and error handling:
+**Image Preview:**
+
+```typescript
+const { url, expiresAt } = await storage.get(fileKey);
+
+// Display image
+<img src={url} alt="Preview" />
+
+// Check expiration
+console.log(`URL expires at: ${new Date(expiresAt * 1000).toLocaleString()}`);
+```
+
+**Video Player:**
+
+```typescript
+const { url } = await storage.get(videoKey);
+
+<video src={url} controls />
+```
+
+**File Download:**
+
+```typescript
+const { url } = await storage.get(fileKey);
+
+<a href={url} download>Download File</a>
+```
+
+**Server-Side Preview (App Router):**
+
+```typescript
+// app/files/[key]/page.tsx
+import { storage } from "@oneminutecloud/storage-bucket-next";
+
+export default async function FilePage({ params }: { params: { key: string } }) {
+  const { url } = await storage.get(params.key);
+
+  return <img src={url} alt="File" />;
+}
+```
+
+---
+
+### `handleStorageRequest({ request, props, apiKey })`
+
+API route handler for secure uploads and previews.
+
+#### Parameters
+
+| Parameter | Type                                        | Required | Description                  |
+| --------- | ------------------------------------------- | -------- | ---------------------------- |
+| `request` | `Request`                                   | ✅ Yes   | Next.js request object       |
+| `props`   | `{ params: Promise<{ provider: string }> }` | ✅ Yes   | Route params                 |
+| `apiKey`  | `string`                                    | ✅ Yes   | Your OneMinute Cloud API key |
+
+#### Returns
+
+```typescript
+Promise<Response>;
+```
+
+## 🎯 Complete Example: Upload & Preview
 
 ```typescript
 "use client";
@@ -173,11 +268,12 @@ Here's a full example with progress tracking and error handling:
 import { storage } from "@oneminutecloud/storage-bucket-next";
 import { useState } from "react";
 
-export default function FileUploader() {
+export default function FileManager() {
   const [file, setFile] = useState<File | null>(null);
   const [progress, setProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [fileKey, setFileKey] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -185,6 +281,7 @@ export default function FileUploader() {
       setFile(selectedFile);
       setProgress(0);
       setFileKey(null);
+      setPreviewUrl(null);
     }
   };
 
@@ -210,10 +307,15 @@ export default function FileUploader() {
       });
 
       setFileKey(key);
+
+      // Automatically load preview
+      const { url } = await storage.get(key);
+      setPreviewUrl(url);
+
       alert("Upload successful!");
-    } catch (error) {
-      console.error("Upload failed:", error);
-      alert("Upload failed. Please try again.");
+    } catch (error:any) {
+      console.error("Upload failed:", error?.message);
+      alert(error?.message || "Upload failed. Please try again.");
     } finally {
       setUploading(false);
     }
@@ -221,13 +323,16 @@ export default function FileUploader() {
 
   return (
     <div className="space-y-4">
+      {/* File Input */}
       <input
         type="file"
         onChange={handleFileChange}
         disabled={uploading}
+        accept="image/*,video/*"
         className="block"
       />
 
+      {/* File Info */}
       {file && (
         <div>
           <p>Selected: {file.name}</p>
@@ -235,27 +340,39 @@ export default function FileUploader() {
         </div>
       )}
 
+      {/* Upload Button */}
       <button
         onClick={handleUpload}
         disabled={!file || uploading}
-        className="px-4 py-2 bg-blue-500 text-white rounded"
+        className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-400"
       >
         {uploading ? `Uploading... ${progress}%` : "Upload"}
       </button>
 
+      {/* Progress Bar */}
       {uploading && (
-        <div className="w-full bg-gray-200 rounded">
+        <div className="w-full bg-gray-200 rounded h-2">
           <div
-            className="bg-blue-500 h-2 rounded transition-all"
+            className="bg-blue-500 h-2 rounded transition-all duration-300"
             style={{ width: `${progress}%` }}
           />
         </div>
       )}
 
-      {fileKey && (
-        <div className="p-4 bg-green-50 rounded">
-          <p>File uploaded successfully!</p>
-          <p className="text-sm text-gray-600">Key: {fileKey}</p>
+      {/* Preview */}
+      {previewUrl && (
+        <div className="border rounded p-4">
+          <h3 className="font-semibold mb-2">Preview:</h3>
+          {file?.type.startsWith("image/") ? (
+            <img src={previewUrl} alt="Preview" className="max-w-md rounded" />
+          ) : file?.type.startsWith("video/") ? (
+            <video src={previewUrl} controls className="max-w-md rounded" />
+          ) : (
+            <a href={previewUrl} download className="text-blue-500 underline">
+              Download File
+            </a>
+          )}
+          <p className="text-sm text-gray-500 mt-2">Key: {fileKey}</p>
         </div>
       )}
     </div>
@@ -273,23 +390,35 @@ Your API key is **never exposed** to the client. It stays securely on your serve
 Client → /api/oneminutecloud/[provider] (your Next.js API route)
          ↓ (API key added server-side)
          → OneMinute Cloud Backend
-         ← Presigned URLs
-Client → S3 directly (using presigned URLs)
+         ← Presigned URLs (time-limited)
+Client → S3/CDN directly (using presigned URLs)
 ```
+
+### Presigned URL Security
+
+- ⏱️ **Time-limited** - URLs expire after 5 minutes
+- 🔐 **Access controlled** - Your backend validates ownership before generating URLs
+- 🚫 **No direct access** - Files aren't publicly accessible without valid presigned URLs
 
 ### Best Practices
 
-- ✅ **Always** store API keys in `.env.local`
-- ✅ **Never** commit `.env.local` to Git
-- ✅ Add `.env.local` to your `.gitignore`
+- ✅ **Always** store API keys in `.env`
+- ✅ **Never** commit `.env` to Git
+- ✅ Add `.env` to your `.gitignore`
 - ✅ Use different API keys for development and production
+- ✅ Validate file ownership on your backend before displaying previews
 
 ## 📝 TypeScript Support
 
 Full TypeScript support with type definitions included:
 
 ```typescript
-import { storage, UploadOptions, UploadProgress } from "@oneminutecloud/storage-bucket-next";
+import {
+  storage,
+  UploadOptions,
+  UploadProgress,
+  PreviewResult,
+} from "@oneminutecloud/storage-bucket-next";
 
 const options: UploadOptions = {
   onProgress: (progress: UploadProgress) => {
@@ -298,19 +427,21 @@ const options: UploadOptions = {
 };
 
 const { key } = await storage.upload(file, bucketId, options);
+const preview: PreviewResult = await storage.get(key);
 ```
 
 ## 🤔 FAQ
 
 ### How do I get my bucket ID?
 
-1. Go to your [OneMinute Cloud dashboard](https://oneminutecloud.com/dashboard)
+1. Go to your [OneMinute Cloud dashboard](https://dashboard.oneminutecloud.com/storage)
 2. Select your storage bucket
-3. Copy the bucket ID from the settings
+3. Copy the bucket ID from the three dot on the right side
 
 ### What file types are supported?
 
 Currently supported:
+
 - ✅ Text files (`.txt`, `.md`, etc.)
 - ✅ Images (`.jpg`, `.png`, `.gif`, `.webp`)
 - ✅ Videos (`.mp4`, `.mov`, `.avi`, etc.)
@@ -318,6 +449,10 @@ Currently supported:
 ### What's the maximum file size?
 
 The SDK supports multipart uploads, so there's no practical limit. Files are automatically chunked for efficient upload.
+
+### How long are preview URLs valid?
+
+Preview URLs are valid for 5 minutes by default. After that, you need to call `storage.get()` again to generate a new URL.
 
 ### Can I use this with the Pages Router?
 
@@ -328,12 +463,14 @@ Yes! The API route works the same way:
 import { handleStorageRequest } from "@oneminutecloud/storage-bucket-next";
 import type { NextApiRequest, NextApiResponse } from "next";
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse,
+) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // Convert to Web API Request format
   const request = new Request(`http://localhost${req.url}`, {
     method: req.method,
     headers: req.headers as HeadersInit,
@@ -342,7 +479,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const response = await handleStorageRequest({
     request,
-    props: { params: Promise.resolve({ provider: req.query.provider as string }) },
+    props: {
+      params: Promise.resolve({ provider: req.query.provider as string }),
+    },
     apiKey: process.env.ONEMINUTECLOUD_API_KEY!,
   });
 
@@ -351,30 +490,55 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 }
 ```
 
-### How do I retrieve uploaded files?
+### Can I control who can access files?
 
-Use the returned `key` to construct the file URL:
+Yes! Implement access control in your own API:
 
 ```typescript
-const fileUrl = `https://cdn.oneminutecloud.com/${bucketId}/${key}`;
-```
+// app/api/files/[key]/route.ts
+import { storage } from "@oneminutecloud/storage-bucket-next";
+import { getServerSession } from "next-auth";
 
-Or retrieve through your API with proper access control.
+export async function GET(
+  request: Request,
+  { params }: { params: { key: string } },
+) {
+  const session = await getServerSession();
+
+  // Check if user owns this file
+  const file = await db.files.findOne({ key: params.key });
+  if (file.userId !== session.user.id) {
+    return Response.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
+  // Generate preview URL
+  const { url } = await storage.get(params.key);
+  return Response.json({ url });
+}
+```
 
 ## 🐛 Troubleshooting
 
 ### "Missing API route" error
 
 Make sure you've created the API route at:
+
 ```
 app/api/oneminutecloud/[provider]/route.ts
 ```
 
 ### "Invalid API key" error
 
-1. Check that `ONEMINUTECLOUD_API_KEY` is set in `.env.local`
+1. Check that `ONEMINUTECLOUD_API_KEY` is set in `.env`
 2. Verify the API key is correct in your dashboard
 3. Restart your Next.js dev server after adding the env variable
+
+### "Failed to get file preview" error
+
+1. Make sure the file key exists and was returned from `storage.upload()`
+2. Verify you have access to the file
+3. Check that the bucket still exists
+4. Check your account data transfer limit
 
 ### TypeScript errors
 
@@ -391,18 +555,18 @@ MIT © [OneMinute Cloud](https://oneminutecloud.com)
 ## 🔗 Links
 
 - [Documentation](https://docs.oneminutecloud.com)
-- [Dashboard](https://oneminutecloud.com/dashboard)
-- [Support](https://oneminutecloud.com/support)
-- [GitHub](https://github.com/oneminutecloud/storage-bucket-next)
+- [Dashboard](https://dashboard.oneminutecloud.com)
+- [Support](mailto:contact@oneminutstack.com)
+- [GitHub](https://github.com/One-Minute-Stack/oneminutecloud-storage-bucket-next)
 
 ## 💬 Support
 
 Need help? Reach out:
 
-- 📧 Email: support@oneminutecloud.com
-- 💬 Discord: [Join our community](https://discord.gg/oneminutecloud)
-- 🐦 Twitter: [@oneminutecloud](https://twitter.com/oneminutecloud)
+- 📧 Email: contact@oneminutstack.com
+- 💬 Discord: [Join our community](https://discord.gg/oneminutestack)
+- 🐦 Twitter: [@oneminutecloud](https://twitter.com/oneminutestack)
 
 ---
 
-Made with ❤️ by the OneMinute Cloud team
+Made with ❤️ by the OneMinute Stack team
