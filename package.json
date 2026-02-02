@@ -1,0 +1,60 @@
+{
+  "name": "@oneminutecloud/storage-bucket-next",
+  "version": "1.0.2",
+  "description": "Next.js SDK for OneMinute Cloud Storage Bucket",
+  "license": "ISC",
+  "author": "OneMinute Stack",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "cloud",
+    "storage",
+    "buckets"
+  ],
+  "homepage": "https://github.com/One-Minute-Stack/oneminutecloud-storage-bucket-next#readme",
+  "bugs": {
+    "url": "https://github.com/One-Minute-Stack/oneminutecloud-storage-bucket-next/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/One-Minute-Stack/oneminutecloud-storage-bucket-next.git"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.9",
+    "@types/react": "^19.2.9",
+    "ts-node": "^10.9.2",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "next": ">=13",
+    "react": ">=18"
+  }
+}
